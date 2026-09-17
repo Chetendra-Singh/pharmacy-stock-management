@@ -8,7 +8,6 @@
 </head>
 <body class="bg-gray-50 text-gray-800">
 
-    <!-- TOAST NOTIFICATION -->
     <div id="toast" class="fixed top-4 right-4 hidden px-4 py-2 rounded shadow-lg text-white font-bold transition-opacity z-50"></div>
 
     <!-- VIEW 1: LANDING, LOGIN & REGISTER -->
@@ -63,18 +62,20 @@
             <button onclick="logout()" class="text-red-500 font-bold hover:underline">Logout</button>
         </div>
 
-        <!-- Alerts Section -->
         <div id="alerts-container" class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded hidden">
             <h3 class="font-bold">⚠️ Expiring Batches Alert</h3>
             <ul id="alerts-list" class="list-disc pl-5 mt-2"></ul>
         </div>
 
-        <!-- Search, Filter & Sort -->
-        <div class="bg-white p-4 rounded shadow mb-6 flex flex-wrap gap-4 items-end">
-            <div class="flex-1 min-w-[200px]">
+        <!-- Search, Filter & Add Medicine -->
+        <div class="bg-white p-4 rounded shadow mb-6 flex flex-wrap gap-4 items-end justify-between">
+            <div class="flex-1 min-w-[200px] max-w-md">
                 <label class="block text-sm font-medium text-gray-700">Search Medicine</label>
                 <input type="text" id="search-input" onkeyup="resetPageAndLoad()" placeholder="e.g., Paracetamol..." class="w-full border p-2 rounded">
             </div>
+            <button onclick="openAddMedicineModal()" class="bg-purple-600 text-white px-4 py-2 rounded font-bold hover:bg-purple-700">
+                + Add New Medicine
+            </button>
         </div>
 
         <!-- Inventory Table -->
@@ -88,12 +89,9 @@
                         <th class="p-4">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="inventory-tbody">
-                    <!-- Populated by JS -->
-                </tbody>
+                <tbody id="inventory-tbody"></tbody>
             </table>
             
-            <!-- Pagination Controls -->
             <div class="p-4 border-t flex justify-between items-center bg-gray-50">
                 <button onclick="changePage(-1)" id="prev-btn" class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50" disabled>Previous</button>
                 <span class="text-sm font-medium text-gray-600">Page <span id="current-page">1</span></span>
@@ -117,13 +115,12 @@
                 <div>
                     <label class="block text-sm font-medium">Course Duration (Days Buffer)</label>
                     <input type="number" id="dispense-buffer" class="w-full border p-2 rounded" value="30">
-                    <p class="text-xs text-gray-500 mt-1">Ensures med doesn't expire during patient's course.</p>
                 </div>
             </div>
             
             <div class="mt-6 flex justify-end gap-2">
                 <button onclick="closeModal('dispense-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
-                <button onclick="submitDispense()" class="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Confirm Dispense</button>
+                <button onclick="submitDispense()" class="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Confirm</button>
             </div>
         </div>
     </div>
@@ -153,11 +150,52 @@
         </div>
     </div>
 
+    <!-- MODAL: ADD MEDICINE -->
+    <div id="add-medicine-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h2 class="text-xl font-bold mb-4">Add New Medicine</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Medicine Name</label>
+                    <input type="text" id="new-med-name" class="w-full border p-2 rounded" placeholder="e.g., Ibuprofen 400mg" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Description</label>
+                    <input type="text" id="new-med-desc" class="w-full border p-2 rounded" placeholder="e.g., Pain reliever">
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="closeModal('add-medicine-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button onclick="submitAddMedicine()" class="px-4 py-2 bg-purple-600 text-white rounded font-bold hover:bg-purple-700">Save Medicine</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VIEW BATCHES -->
+    <div id="view-batches-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white p-6 rounded-lg w-[500px] shadow-xl max-h-[80vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4" id="view-batches-title">Active Batches</h2>
+            <table class="w-full text-left border-collapse mb-4">
+                <thead>
+                    <tr class="bg-gray-100 border-b text-sm">
+                        <th class="p-2">Batch ID</th>
+                        <th class="p-2">Quantity</th>
+                        <th class="p-2">Expiry Date</th>
+                    </tr>
+                </thead>
+                <tbody id="batches-tbody"></tbody>
+            </table>
+            <div class="flex justify-end">
+                <button onclick="closeModal('view-batches-modal')" class="px-4 py-2 bg-gray-600 text-white rounded font-bold hover:bg-gray-700">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentPage = 1;
-        const limit = 5; // Low limit to demonstrate pagination easily
+        const limit = 5; 
 
-        // --- UTILS ---
         function showToast(message, type = 'green') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
@@ -173,7 +211,6 @@
             };
         }
 
-        // --- AUTH ---
         function toggleAuthMode() {
             const modeInput = document.getElementById('auth-mode');
             const title = document.getElementById('auth-title');
@@ -247,7 +284,6 @@
             document.getElementById('password').value = '';
         }
 
-        // --- DASHBOARD DATA ---
         function loadDashboard() {
             loadAlerts();
             loadMedicines();
@@ -309,7 +345,7 @@
                         <div class="text-xs text-gray-500">${m.description}</div>
                     </td>
                     <td class="p-4 font-bold ${stockColor}">${m.sellable_stock}</td>
-                    <td class="p-4 flex gap-2">
+                    <td class="p-4 flex flex-wrap gap-2">
                         <button onclick="openDispenseModal(${m.id}, '${m.name}')" 
                                 class="bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200"
                                 ${m.sellable_stock === 0 ? 'disabled opacity-50 cursor-not-allowed' : ''}>
@@ -317,7 +353,11 @@
                         </button>
                         <button onclick="openAddBatchModal(${m.id}, '${m.name}')" 
                                 class="bg-green-100 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-200">
-                            + Add Stock
+                            + Stock
+                        </button>
+                        <button onclick="openViewBatchesModal(${m.id}, '${m.name}')" 
+                                class="bg-gray-200 text-gray-700 px-3 py-1 rounded font-bold hover:bg-gray-300">
+                            View Batches
                         </button>
                     </td>
                 `;
@@ -325,7 +365,6 @@
             });
         }
 
-        // --- MODAL ACTIONS ---
         function closeModal(id) {
             document.getElementById(id).classList.add('hidden');
         }
@@ -361,11 +400,9 @@
         function openAddBatchModal(id, name) {
             document.getElementById('batch-med-id').value = id;
             document.getElementById('batch-med-name').textContent = `Adding stock for: ${name}`;
-            
             const nextYear = new Date();
             nextYear.setFullYear(nextYear.getFullYear() + 1);
             document.getElementById('batch-expiry').value = nextYear.toISOString().split('T')[0];
-            
             document.getElementById('add-batch-modal').classList.remove('hidden');
         }
 
@@ -375,13 +412,11 @@
                 quantity: parseInt(document.getElementById('batch-qty').value),
                 expiry_date: document.getElementById('batch-expiry').value
             };
-
             const res = await fetch('/api/batches', {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(payload)
             });
-
             if (res.ok) {
                 showToast('New batch added successfully!', 'green');
                 closeModal('add-batch-modal');
@@ -392,7 +427,65 @@
             }
         }
 
-        // Check login on load
+        function openAddMedicineModal() {
+            document.getElementById('new-med-name').value = '';
+            document.getElementById('new-med-desc').value = '';
+            document.getElementById('add-medicine-modal').classList.remove('hidden');
+        }
+
+        async function submitAddMedicine() {
+            const payload = {
+                name: document.getElementById('new-med-name').value,
+                description: document.getElementById('new-med-desc').value
+            };
+            const res = await fetch('/api/medicines', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                showToast('New medicine created successfully!', 'green');
+                closeModal('add-medicine-modal');
+                resetPageAndLoad(); 
+            } else {
+                const data = await res.json();
+                showToast(`Failed: ${data.detail || 'Invalid input'}`, 'red');
+            }
+        }
+
+        async function openViewBatchesModal(medicine_id, name) {
+            document.getElementById('view-batches-title').textContent = `${name} - Active Batches`;
+            const tbody = document.getElementById('batches-tbody');
+            tbody.innerHTML = '<tr><td colspan="3" class="p-2 text-center text-gray-500">Loading...</td></tr>';
+            
+            document.getElementById('view-batches-modal').classList.remove('hidden');
+
+            const res = await fetch(`/api/medicines/${medicine_id}/batches`, { headers: getAuthHeaders() });
+            if (!res.ok) {
+                tbody.innerHTML = '<tr><td colspan="3" class="p-2 text-center text-red-500">Failed to load batches</td></tr>';
+                return;
+            }
+            
+            const batches = await res.json();
+            tbody.innerHTML = '';
+            
+            if (batches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="p-2 text-center text-gray-500">No active stock.</td></tr>';
+                return;
+            }
+
+            batches.forEach(b => {
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-2 text-gray-600">#${b.id}</td>
+                    <td class="p-2 font-bold">${b.quantity}</td>
+                    <td class="p-2 font-mono text-sm ${new Date(b.expiry_date) < new Date() ? 'text-red-600' : 'text-gray-800'}">${b.expiry_date}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
         if (localStorage.getItem('token')) {
             document.getElementById('landing-view').classList.add('hidden');
             document.getElementById('dashboard-view').classList.remove('hidden');

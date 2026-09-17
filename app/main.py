@@ -59,6 +59,21 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def read_medicines(skip: int = 0, limit: int = 10, search: str = "", db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_medicines(db, skip=skip, limit=limit, search=search)
 
+@app.post("/api/medicines", response_model=schemas.Medicine)
+def create_medicine(medicine: schemas.MedicineCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.create_medicine(db=db, medicine=medicine)
+
+@app.post("/api/batches", response_model=schemas.Batch)
+def create_batch(batch: schemas.BatchCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.create_batch(db=db, batch=batch)
+
+@app.get("/api/medicines/{medicine_id}/batches", response_model=list[schemas.Batch])
+def get_medicine_batches(medicine_id: int, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
+    return db.query(models.Batch).filter(
+        models.Batch.medicine_id == medicine_id, 
+        models.Batch.quantity > 0
+    ).order_by(models.Batch.expiry_date.asc()).all()
+
 @app.post("/api/dispense")
 def dispense_medicine(request: schemas.DispenseRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(get_current_user)):
     try:
@@ -84,10 +99,10 @@ def seed_data():
         db.commit()
         # Seed Batches
         db.add_all([
-            models.Batch(medicine_id=med1.id, quantity=100, expiry_date=date.today() + timedelta(days=5)), # Expiring soon
-            models.Batch(medicine_id=med1.id, quantity=500, expiry_date=date.today() + timedelta(days=365)), # Safe
-            models.Batch(medicine_id=med2.id, quantity=50, expiry_date=date.today() - timedelta(days=10)), # Expired
-            models.Batch(medicine_id=med2.id, quantity=200, expiry_date=date.today() + timedelta(days=400)) # Safe
+            models.Batch(medicine_id=med1.id, quantity=100, expiry_date=date.today() + timedelta(days=5)), 
+            models.Batch(medicine_id=med1.id, quantity=500, expiry_date=date.today() + timedelta(days=365)), 
+            models.Batch(medicine_id=med2.id, quantity=50, expiry_date=date.today() - timedelta(days=10)), 
+            models.Batch(medicine_id=med2.id, quantity=200, expiry_date=date.today() + timedelta(days=400)) 
         ])
         db.commit()
     db.close()

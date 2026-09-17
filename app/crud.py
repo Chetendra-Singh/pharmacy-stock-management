@@ -33,6 +33,20 @@ def get_medicines(db: Session, skip: int = 0, limit: int = 100, search: str = ""
         med.sellable_stock = stock or 0
     return medicines
 
+def create_medicine(db: Session, medicine: schemas.MedicineCreate):
+    db_medicine = models.Medicine(name=medicine.name, description=medicine.description)
+    db.add(db_medicine)
+    db.commit()
+    db.refresh(db_medicine)
+    return db_medicine
+
+def create_batch(db: Session, batch: schemas.BatchCreate):
+    db_batch = models.Batch(**batch.model_dump())
+    db.add(db_batch)
+    db.commit()
+    db.refresh(db_batch)
+    return db_batch
+
 def get_expiring_batches(db: Session, days_threshold: int = 30):
     target_date = date.today() + timedelta(days=days_threshold)
     return db.query(models.Batch).filter(
