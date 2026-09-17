@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from passlib.context import CryptContext
 from . import models, schemas
 
@@ -28,7 +28,8 @@ def get_medicines(db: Session, skip: int = 0, limit: int = 100, search: str = ""
         stock = db.query(func.sum(models.Batch.quantity)).filter(
             models.Batch.medicine_id == med.id,
             models.Batch.expiry_date >= date.today(),
-            models.Batch.quantity > 0
+            models.Batch.quantity > 0,
+            models.Batch.status != "quarantined"
         ).scalar()
         med.sellable_stock = stock or 0
     return medicines
@@ -52,7 +53,8 @@ def get_expiring_batches(db: Session, days_threshold: int = 30):
     return db.query(models.Batch).filter(
         models.Batch.expiry_date >= date.today(),
         models.Batch.expiry_date <= target_date,
-        models.Batch.quantity > 0
+        models.Batch.quantity > 0,
+        models.Batch.status != "quarantined"
     ).order_by(models.Batch.expiry_date.asc()).all()
 
 def dispense_medicine(db: Session, request: schemas.DispenseRequest):
@@ -61,7 +63,8 @@ def dispense_medicine(db: Session, request: schemas.DispenseRequest):
     batches = db.query(models.Batch).filter(
         models.Batch.medicine_id == request.medicine_id,
         models.Batch.expiry_date >= safe_expiry_threshold,
-        models.Batch.quantity > 0
+        models.Batch.quantity > 0,
+        models.Batch.status != "quarantined"
     ).order_by(models.Batch.expiry_date.asc()).all()
 
     total_available = sum(b.quantity for b in batches)
@@ -80,4 +83,23 @@ def dispense_medicine(db: Session, request: schemas.DispenseRequest):
             remaining_to_dispense = 0
             
     db.commit()
-    return {"message": f"Successfully dispensed {request.quantity} units.", "remaining_safe_stock": total_available - request.quantity}
+    
+    total_remaining = total_available - request.quantity
+    
+    # --- TWIST 3: Notification Service Alert ---
+    THRESHOLD = 20
+    if total_remaining < THRESHOLD:
+        from .main import NOTIFICATION_OUTBOX
+        already_alerted = any(
+            alert.get("medicine_id") == request.medicine_id 
+            for alert in NOTIFICATION_OUTBOX
+        )
+        if not already_alerted:
+            NOTIFICATION_OUTBOX.append({
+                "medicine_id": request.medicine_id,
+                "type": "reorder_alert",
+                "message": f"Stock dropped to {total_remaining}. Reorder required.",
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+    return {"message": f"Successfully dispensed {request.quantity} units.", "remaining_safe_stock": total_remaining}
