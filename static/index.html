@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FEFO Pharmacy Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed top-4 right-4 hidden px-4 py-2 rounded shadow-lg text-white font-bold transition-opacity z-50"></div>
+
+    <!-- VIEW 1: LANDING, LOGIN & REGISTER -->
+    <div id="landing-view" class="max-w-5xl mx-auto mt-20 p-6 bg-white rounded-lg shadow-xl">
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-blue-600 mb-4">FEFO Pharmacy Manager</h1>
+            <p class="text-lg text-gray-600">Ensure nothing expired goes out. Automated First-Expiry-First-Out dispensing, real-time sellable stock tracking, and expiring batch alerts.</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-blue-50 p-6 rounded-lg">
+                <h3 class="font-bold text-xl mb-2">Key Features</h3>
+                <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                    <li>Oldest-first dispensing (FEFO)</li>
+                    <li>Accurate in-date stock count</li>
+                    <li>Automated expiration alerts</li>
+                </ul>
+                <h3 class="font-bold text-xl mt-6 mb-2">Coming Next</h3>
+                <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                    <li>Barcode scanner integration</li>
+                    <li>Supplier API reordering</li>
+                    <li>Revenue analytics dashboard</li>
+                </ul>
+            </div>
+
+            <div class="p-6 border rounded-lg relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 id="auth-title" class="text-2xl font-bold">Pharmacist Login</h2>
+                    <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="text-blue-600 text-sm hover:underline">Need to Register?</button>
+                </div>
+                
+                <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
+                    <input type="hidden" id="auth-mode" value="login">
+                    <div>
+                        <label class="block text-sm font-medium">Username</label>
+                        <input type="text" id="username" class="w-full border p-2 rounded" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Password</label>
+                        <input type="password" id="password" class="w-full border p-2 rounded" required>
+                    </div>
+                    <button type="submit" id="auth-submit-btn" class="w-full bg-blue-600 text-white p-2 rounded font-bold hover:bg-blue-700">Login to Dashboard</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW 2: DASHBOARD -->
+    <div id="dashboard-view" class="hidden max-w-6xl mx-auto mt-10 p-6">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Inventory Dashboard</h1>
+            <button onclick="logout()" class="text-red-500 font-bold hover:underline">Logout</button>
+        </div>
+
+        <!-- Alerts Section -->
+        <div id="alerts-container" class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded hidden">
+            <h3 class="font-bold">⚠️ Expiring Batches Alert</h3>
+            <ul id="alerts-list" class="list-disc pl-5 mt-2"></ul>
+        </div>
+
+        <!-- Search, Filter & Sort -->
+        <div class="bg-white p-4 rounded shadow mb-6 flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700">Search Medicine</label>
+                <input type="text" id="search-input" onkeyup="resetPageAndLoad()" placeholder="e.g., Paracetamol..." class="w-full border p-2 rounded">
+            </div>
+        </div>
+
+        <!-- Inventory Table -->
+        <div class="bg-white rounded shadow overflow-hidden">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-gray-100 border-b">
+                        <th class="p-4">ID</th>
+                        <th class="p-4">Name & Description</th>
+                        <th class="p-4">In-Date Stock</th>
+                        <th class="p-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inventory-tbody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+            
+            <!-- Pagination Controls -->
+            <div class="p-4 border-t flex justify-between items-center bg-gray-50">
+                <button onclick="changePage(-1)" id="prev-btn" class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50" disabled>Previous</button>
+                <span class="text-sm font-medium text-gray-600">Page <span id="current-page">1</span></span>
+                <button onclick="changePage(1)" id="next-btn" class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DISPENSE -->
+    <div id="dispense-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h2 class="text-xl font-bold mb-4">Dispense Medicine</h2>
+            <p id="dispense-med-name" class="font-semibold text-blue-600 mb-4"></p>
+            <input type="hidden" id="dispense-med-id">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Quantity Required</label>
+                    <input type="number" id="dispense-qty" class="w-full border p-2 rounded" min="1" value="1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Course Duration (Days Buffer)</label>
+                    <input type="number" id="dispense-buffer" class="w-full border p-2 rounded" value="30">
+                    <p class="text-xs text-gray-500 mt-1">Ensures med doesn't expire during patient's course.</p>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="closeModal('dispense-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button onclick="submitDispense()" class="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Confirm Dispense</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ADD BATCH -->
+    <div id="add-batch-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white p-6 rounded-lg w-96 shadow-xl">
+            <h2 class="text-xl font-bold mb-4">Add New Batch</h2>
+            <p id="batch-med-name" class="font-semibold text-green-600 mb-4"></p>
+            <input type="hidden" id="batch-med-id">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Quantity Received</label>
+                    <input type="number" id="batch-qty" class="w-full border p-2 rounded" min="1" value="50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Expiry Date</label>
+                    <input type="date" id="batch-expiry" class="w-full border p-2 rounded" required>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="closeModal('add-batch-modal')" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button onclick="submitAddBatch()" class="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700">Save Batch</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        const limit = 5; // Low limit to demonstrate pagination easily
+
+        // --- UTILS ---
+        function showToast(message, type = 'green') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `fixed top-4 right-4 px-6 py-3 rounded shadow-lg text-white font-bold transition-opacity z-50 bg-${type}-500`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function getAuthHeaders() {
+            return {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        // --- AUTH ---
+        function toggleAuthMode() {
+            const modeInput = document.getElementById('auth-mode');
+            const title = document.getElementById('auth-title');
+            const toggleBtn = document.getElementById('auth-toggle-btn');
+            const submitBtn = document.getElementById('auth-submit-btn');
+
+            if (modeInput.value === 'login') {
+                modeInput.value = 'register';
+                title.textContent = 'Register Pharmacist';
+                toggleBtn.textContent = 'Already have an account?';
+                submitBtn.textContent = 'Create Account';
+            } else {
+                modeInput.value = 'login';
+                title.textContent = 'Pharmacist Login';
+                toggleBtn.textContent = 'Need to Register?';
+                submitBtn.textContent = 'Login to Dashboard';
+            }
+        }
+
+        async function handleAuth(e) {
+            e.preventDefault();
+            const mode = document.getElementById('auth-mode').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (mode === 'register') {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (res.ok) {
+                    showToast('Registration successful. Logging in...', 'green');
+                    await executeLogin(username, password);
+                } else {
+                    const data = await res.json();
+                    showToast(data.detail, 'red');
+                }
+            } else {
+                await executeLogin(username, password);
+            }
+        }
+
+        async function executeLogin(username, password) {
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('token', data.access_token);
+                document.getElementById('landing-view').classList.add('hidden');
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                loadDashboard();
+            } else {
+                showToast('Invalid credentials', 'red');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            document.getElementById('dashboard-view').classList.add('hidden');
+            document.getElementById('landing-view').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        // --- DASHBOARD DATA ---
+        function loadDashboard() {
+            loadAlerts();
+            loadMedicines();
+        }
+
+        async function loadAlerts() {
+            const res = await fetch('/api/alerts/expiring?days=30', { headers: getAuthHeaders() });
+            if (!res.ok) return;
+            const batches = await res.json();
+            const container = document.getElementById('alerts-container');
+            const list = document.getElementById('alerts-list');
+            list.innerHTML = '';
+            if (batches.length > 0) {
+                container.classList.remove('hidden');
+                batches.forEach(b => {
+                    const li = document.createElement('li');
+                    li.textContent = `Batch ID: ${b.id} | Expires: ${b.expiry_date} | Stock: ${b.quantity}`;
+                    list.appendChild(li);
+                });
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function resetPageAndLoad() {
+            currentPage = 1;
+            loadMedicines();
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            loadMedicines();
+        }
+
+        async function loadMedicines() {
+            const search = document.getElementById('search-input').value;
+            const skip = (currentPage - 1) * limit;
+            
+            const res = await fetch(`/api/medicines?search=${search}&skip=${skip}&limit=${limit}`, { headers: getAuthHeaders() });
+            if (!res.ok) return;
+            let medicines = await res.json();
+            
+            const tbody = document.getElementById('inventory-tbody');
+            tbody.innerHTML = '';
+
+            document.getElementById('current-page').textContent = currentPage;
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = medicines.length < limit;
+
+            medicines.forEach(m => {
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+                let stockColor = m.sellable_stock === 0 ? 'text-red-600' : (m.sellable_stock < 20 ? 'text-yellow-600' : 'text-green-600');
+
+                row.innerHTML = `
+                    <td class="p-4">${m.id}</td>
+                    <td class="p-4">
+                        <div class="font-bold">${m.name}</div>
+                        <div class="text-xs text-gray-500">${m.description}</div>
+                    </td>
+                    <td class="p-4 font-bold ${stockColor}">${m.sellable_stock}</td>
+                    <td class="p-4 flex gap-2">
+                        <button onclick="openDispenseModal(${m.id}, '${m.name}')" 
+                                class="bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200"
+                                ${m.sellable_stock === 0 ? 'disabled opacity-50 cursor-not-allowed' : ''}>
+                            Dispense
+                        </button>
+                        <button onclick="openAddBatchModal(${m.id}, '${m.name}')" 
+                                class="bg-green-100 text-green-700 px-3 py-1 rounded font-bold hover:bg-green-200">
+                            + Add Stock
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // --- MODAL ACTIONS ---
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        function openDispenseModal(id, name) {
+            document.getElementById('dispense-med-id').value = id;
+            document.getElementById('dispense-med-name').textContent = `Dispensing: ${name}`;
+            document.getElementById('dispense-qty').value = 1;
+            document.getElementById('dispense-modal').classList.remove('hidden');
+        }
+
+        async function submitDispense() {
+            const payload = {
+                medicine_id: parseInt(document.getElementById('dispense-med-id').value),
+                quantity: parseInt(document.getElementById('dispense-qty').value),
+                course_duration_days: parseInt(document.getElementById('dispense-buffer').value)
+            };
+            const res = await fetch('/api/dispense', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(data.message, 'green');
+                closeModal('dispense-modal');
+                loadDashboard();
+            } else {
+                showToast(`Failed: ${data.detail}`, 'red');
+            }
+        }
+
+        function openAddBatchModal(id, name) {
+            document.getElementById('batch-med-id').value = id;
+            document.getElementById('batch-med-name').textContent = `Adding stock for: ${name}`;
+            
+            const nextYear = new Date();
+            nextYear.setFullYear(nextYear.getFullYear() + 1);
+            document.getElementById('batch-expiry').value = nextYear.toISOString().split('T')[0];
+            
+            document.getElementById('add-batch-modal').classList.remove('hidden');
+        }
+
+        async function submitAddBatch() {
+            const payload = {
+                medicine_id: parseInt(document.getElementById('batch-med-id').value),
+                quantity: parseInt(document.getElementById('batch-qty').value),
+                expiry_date: document.getElementById('batch-expiry').value
+            };
+
+            const res = await fetch('/api/batches', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                showToast('New batch added successfully!', 'green');
+                closeModal('add-batch-modal');
+                loadDashboard();
+            } else {
+                const data = await res.json();
+                showToast(`Failed: ${data.detail || 'Invalid input'}`, 'red');
+            }
+        }
+
+        // Check login on load
+        if (localStorage.getItem('token')) {
+            document.getElementById('landing-view').classList.add('hidden');
+            document.getElementById('dashboard-view').classList.remove('hidden');
+            loadDashboard();
+        }
+    </script>
+</body>
+</html>
